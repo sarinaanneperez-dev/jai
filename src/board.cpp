@@ -3,6 +3,7 @@
 #include "zobrist.h"
 #include <sstream>
 #include <cctype>
+#include <iostream>   // for debug prints
 
 namespace jaishi {
 
@@ -66,7 +67,7 @@ void Board::move_piece(int from, int to) {
 
 int Board::king_square(Color c) const {
     U64 k = piece_bb[make_piece(c, KING)];
-    return k ? __builtin_ctzll(k) : NO_SQUARE;
+    return k ? lsb(k) : NO_SQUARE;
 }
 
 U64 Board::attackers_to(int sq, U64 occ) const {
@@ -104,7 +105,7 @@ U64 Board::compute_key() const {
     for (int p = 0; p < 12; ++p) {
         U64 bb = piece_bb[p];
         while (bb) {
-            int sq = __builtin_ctzll(bb); bb &= bb - 1;
+            int sq = pop_lsb(bb);
             k ^= ZOBRIST.piece[p][sq];
         }
     }
@@ -204,6 +205,13 @@ std::string Board::to_fen() const {
 
 // -------- make / undo --------
 bool Board::make_move(Move m) {
+    // Consistency check before
+    if (!is_consistent()) {
+        std::cerr << "Board inconsistent BEFORE make_move!\n";
+        std::cerr << "FEN: " << to_fen() << "\n";
+        return false;
+    }
+
     UndoInfo& u = undo_stack[undo_size++];
     u.key       = zobrist_key;
     u.castling  = castling_rights;
@@ -280,6 +288,15 @@ bool Board::make_move(Move m) {
     }
 
     key_history[history_size++] = zobrist_key;
+
+    // Consistency check after
+    if (!is_consistent()) {
+        std::cerr << "Board inconsistent AFTER make_move!\n";
+        std::cerr << "Move: " << move_to_uci(m) << "\n";
+        std::cerr << "FEN: " << to_fen() << "\n";
+        std::abort(); // abort to catch the first corruption
+    }
+
     return true;
 }
 
@@ -364,15 +381,50 @@ bool Board::insufficient_material() const {
     if (piece_bb[W_PAWN] || piece_bb[B_PAWN]) return false;
     if (piece_bb[W_ROOK] || piece_bb[B_ROOK]) return false;
     if (piece_bb[W_QUEEN] || piece_bb[B_QUEEN]) return false;
-    int wN = __builtin_popcountll(piece_bb[W_KNIGHT]);
-    int bN = __builtin_popcountll(piece_bb[B_KNIGHT]);
-    int wB = __builtin_popcountll(piece_bb[W_BISHOP]);
-    int bB = __builtin_popcountll(piece_bb[B_BISHOP]);
+    int wN = popcount(piece_bb[W_KNIGHT]);
+    int bN = popcount(piece_bb[B_KNIGHT]);
+    int wB = popcount(piece_bb[W_BISHOP]);
+    int bB = popcount(piece_bb[B_BISHOP]);
     int total = wN + bN + wB + bB;
     if (total <= 1) return true;           // K vs K, K+N, K+B
     if (total == 2 && (wN + bN == 2))      // K+N vs K+N (drawish but not forced)
         return false;
     return false;
+}
+
+bool Board::is_consistent() const {
+    // Verify that bitboards and mailbox agree on every square
+    for (int sq = 0; sq < 64; ++sq) {
+        Piece p = mailbox[sq];
+        bool in_piece_bb = (p != NO_PIECE) ? (piece_bb[p] & bit(sq)) != 0 : false;
+        bool in_color_bb = (p != NO_PIECE) ? (color_bb[color_of(p)] & bit(sq)) != 0 : false;
+        bool in_all_bb   = (all_bb & bit(sq)) != 0;
+
+        if (p != NO_PIECE) {
+            if (!in_piece_bb || !in_color_bb || !in_all_bb) return false;
+        } else {
+            if (in_piece_bb || in_color_bb || in_all_bb) return false;
+        }
+    }
+
+    // Verify total piece count matches bitboards
+    int total = 0;
+    for (int p = 0; p < 12; ++p) total += popcount(piece_bb[p]);
+    if (total != popcount(all_bb)) return false;
+
+    // Verify color counts
+    if (popcount(color_bb[WHITE]) + popcount(color_bb[BLACK]) != popcount(all_bb)) return false;
+
+    // Verify exactly one king per side
+    if (popcount(piece_bb[W_KING]) != 1 || popcount(piece_bb[B_KING]) != 1) return false;
+
+    // Verify that no piece appears in wrong color's bitboard
+    for (int p = 0; p < 12; ++p) {
+        Color c = color_of(static_cast<Piece>(p));
+        if (piece_bb[p] & ~color_bb[c]) return false;
+    }
+
+    return true;
 }
 
 } // namespace jaishi
