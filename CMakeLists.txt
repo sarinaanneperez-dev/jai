@@ -44,10 +44,15 @@ target_link_libraries(jaishi PRIVATE jaishi_core)
 
 enable_testing()
 
-add_executable(jaishi_tests
-    tests/perft_tests.cpp
-    tests/search_tests.cpp
-    tests/evaluation_tests.cpp
-)
-target_link_libraries(jaishi_tests PRIVATE jaishi_core)
-add_test(NAME JaishiTests COMMAND jaishi_tests)
+# --- Individual test executables ---
+add_executable(jaishi_perft_tests tests/perft_tests.cpp)
+target_link_libraries(jaishi_perft_tests PRIVATE jaishi_core)
+add_test(NAME PerftTests COMMAND jaishi_perft_tests)
+
+add_executable(jaishi_search_tests tests/search_tests.cpp)
+target_link_libraries(jaishi_search_tests PRIVATE jaishi_core)
+add_test(NAME SearchTests COMMAND jaishi_search_tests)
+
+add_executable(jaishi_evaluation_tests tests/evaluation_tests.cpp)
+target_link_libraries(jaishi_evaluation_tests PRIVATE jaishi_core)
+add_test(NAME EvaluationTests COMMAND jaishi_evaluation_tests)
