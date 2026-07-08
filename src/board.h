@@ -77,6 +77,9 @@ public:
     // Rebuild zobrist key from scratch (for verification / setup).
     U64   compute_key() const;
 
+    // Consistency check – returns true if board state is valid.
+    bool  is_consistent() const;
+
 private:
     void  put_piece(Piece p, int sq);
     void  remove_piece(int sq);
