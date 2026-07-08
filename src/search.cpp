@@ -37,7 +37,7 @@ void init_lmr() {
 }
 bool LMR_INIT_DONE = (init_lmr(), true);
 
-// -------------- SEE --------------
+// -------------- SEE helpers (internal) --------------
 static int pt_val(PieceType pt) { return SEE_PIECE_VALUE[pt]; }
 
 static U64 least_valuable_attacker(const Board& b, U64 attackers, Color c, PieceType& out_pt) {
@@ -51,6 +51,9 @@ static U64 least_valuable_attacker(const Board& b, U64 attackers, Color c, Piece
     return 0;
 }
 
+} // namespace
+
+// -------------- SEE (public) --------------
 int see_capture(Board& b, Move m) {
     int from = move_from(m);
     int to   = move_to(m);
@@ -96,6 +99,8 @@ int see_capture(Board& b, Move m) {
     while (--d) gain[d - 1] = -std::max(-gain[d - 1], gain[d]);
     return gain[0];
 }
+
+namespace {
 
 // -------------- Move ordering --------------
 static int score_move(Board& b, Move m, Move tt_move, int ply) {
@@ -419,8 +424,5 @@ Move search_best_move(Board& board, const SearchLimits& limits) {
 
     return best_move;
 }
-
-// External wrapper for tests.
-int see(Board& b, Move m) { return see_capture(b, m); }
 
 } // namespace jaishi
