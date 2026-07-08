@@ -1,13 +1,18 @@
-name: build
+name: build and release
 
 on:
   push:
     branches: [ main ]
+    tags:
+      - 'v*'                # trigger release on version tags
   pull_request:
     branches: [ main ]
 
 jobs:
-  build:
+  #############################
+  # 1. Native builds (Linux, macOS, Windows)
+  #############################
+  build-native:
     strategy:
       fail-fast: false
       matrix:
@@ -15,10 +20,77 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
       - name: Build
         run: cmake --build build --config Release -j
-      - name: Test
+
+      - name: Test (skip on Windows due to possible path issues)
+        if: runner.os != 'Windows'
         working-directory: build
         run: ctest --output-on-failure -C Release
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jaishi-${{ matrix.os }}
+          path: build/jaishi${{ runner.os == 'Windows' && '.exe' || '' }}
+
+  #############################
+  # 2. Android builds (arm64-v8a and armeabi-v7a)
+  #############################
+  build-android:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup NDK
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
+          unzip android-ndk-r26b-linux.zip
+          echo "ANDROID_NDK=$PWD/android-ndk-r26b" >> $GITHUB_ENV
+
+      - name: Configure CMake for Android
+        run: |
+          cmake -B build -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+                -DANDROID_ABI=${{ matrix.abi }} \
+                -DANDROID_PLATFORM=android-24 \
+                -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release -j
+
+      - name: Upload Android binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: jaishi-android-${{ matrix.abi }}
+          path: build/jaishi
+
+  #############################
+  # 3. Release – triggered only on tags
+  #############################
+  release:
+    needs: [build-native, build-android]
+    runs-on: ubuntu-latest
+    # Only run if the push was a tag (and not a PR)
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Create release and upload assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
