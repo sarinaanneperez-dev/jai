@@ -422,6 +422,15 @@ Move search_best_move(Board& board, const SearchLimits& limits) {
         LAST_SEARCH.best_move = candidate;
     }
 
+        // Debug: print FEN before and after playing the best move
+    std::cout << "DEBUG: Before playing best move: " << board.to_fen() << std::endl;
+    if (!board.make_move(best_move)) {
+        std::cerr << "ERROR: Best move is illegal!\n";
+        return NULL_MOVE;
+    }
+    std::cout << "DEBUG: After playing best move: " << board.to_fen() << std::endl;
+    board.undo_move();
+
     return best_move;
 }
 
