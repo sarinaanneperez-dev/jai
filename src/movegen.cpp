@@ -79,13 +79,11 @@ static void gen_pawns(Board& b, MoveList& list, bool captures_only) {
     U64 empty = ~b.all_bb;
     U64 enemy = b.color_bb[them];
     int forward = (us == WHITE) ? 8 : -8;
-    U64 rank3 = (us == WHITE) ? RANK_3 : RANK_6;
     U64 promoRank = (us == WHITE) ? RANK_8 : RANK_1;
 
     U64 tmp = pawns;
     while (tmp) {
         int from = pop_lsb(tmp);
-        int fr = rank_of(from);
 
         // Captures
         U64 att = PAWN_ATTACKS[us][from] & enemy;
@@ -110,21 +108,21 @@ static void gen_pawns(Board& b, MoveList& list, bool captures_only) {
             continue;
         }
 
+        // Single push
         int to1 = from + forward;
         if (to1 < 0 || to1 >= 64) continue;
         if (empty & bit(to1)) {
             bool promo = (bit(to1) & promoRank) != 0;
             add_pawn_moves(from, to1, FLAG_NORMAL, list, promo);
-            // Double push
+
+            // Double push: only from starting rank and both intermediate and destination empty
             if (bit(from) & (us == WHITE ? RANK_2 : RANK_7)) {
                 int to2 = to1 + forward;
-                if ((empty & bit(to2)) && (bit(to1) & rank3 || true /*intermediate empty*/)) {
-                    (void)rank3;
-                    if (empty & bit(to2)) list.add(make_move(from, to2, FLAG_NORMAL));
+                if ((empty & bit(to1)) && (empty & bit(to2))) {
+                    list.add(make_move(from, to2, FLAG_NORMAL));
                 }
             }
         }
-        (void)fr;
     }
 }
 
