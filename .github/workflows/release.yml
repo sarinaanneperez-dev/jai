@@ -1,13 +1,10 @@
 name: build
 
 on:
+  workflow_dispatch:   # allows you to trigger manually from the Actions tab
   push:
-    branches: [ main ]
     tags:
       - 'v*'
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:   # allows you to trigger manually from the Actions tab
 
 permissions:
   contents: write   # required for creating releases
@@ -77,12 +74,9 @@ jobs:
   release:
     needs: [build-native, build-android]
     runs-on: ubuntu-latest
-    # Run only if this is a tag push OR a manual workflow_dispatch (for testing)
-    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
 
-      # Debug: print the ref that triggered this run
       - name: Print ref info
         run: |
           echo "github.ref = ${{ github.ref }}"
