@@ -1,0 +1,54 @@
+# Build output
+build/
+build-*/
+cmake-build-*/
+out/
+bin/
+lib/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+Makefile
+CTestTestfile.cmake
+Testing/
+_deps/
+
+# Compiled objects / binaries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+jaishi
+jaishi_tests
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.vs/
+*.user
+*.suo
+compile_commands.json
+.cache/
+.clangd/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs / profiling
+*.log
+*.pgo
+*.gcda
+*.gcno
+core
+core.*
+perf.data*
