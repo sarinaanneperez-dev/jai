@@ -31,7 +31,7 @@ void movegen_init() {
         KNIGHT_ATTACKS[sq] = kn;
         KING_ATTACKS[sq]   = kg;
 
-        // Pawn attacks (White: upward, Black: downward)
+        // Pawn attacks
         U64 wa = 0, ba = 0;
         if (f > 0 && r < 7) wa |= bit(make_square(f - 1, r + 1));
         if (f < 7 && r < 7) wa |= bit(make_square(f + 1, r + 1));
@@ -197,7 +197,6 @@ void generate_all_moves(Board& b, MoveList& list) {
 
 void generate_captures(Board& b, MoveList& list) {
     list.clear();
-    // For quiescence we also include promotions because they are "noisy"
     gen_pawns(b, list, true);
     gen_piece(b, list, KNIGHT, true);
     gen_piece(b, list, BISHOP, true);
