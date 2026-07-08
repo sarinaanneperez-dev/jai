@@ -1,4 +1,4 @@
-name: build
+name: build & release
 
 on:
   push:
@@ -8,10 +8,13 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: write   # required for creating releases
+
 jobs:
-  #############################
-  # 1. Native builds (Linux & macOS only)
-  #############################
+  # ----------------------------------------------------------------------
+  # Native builds (Linux and macOS)
+  # ----------------------------------------------------------------------
   build-native:
     strategy:
       fail-fast: false
@@ -31,15 +34,18 @@ jobs:
         working-directory: build
         run: ctest --output-on-failure -C Release
 
+      - name: Rename binary
+        run: mv build/jaishi build/jaishi-${{ matrix.os }}
+
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: jaishi-${{ matrix.os }}
-          path: build/jaishi
+          path: build/jaishi-${{ matrix.os }}
 
-  #############################
-  # 2. Android builds (arm64-v8a & armeabi-v7a)
-  #############################
+  # ----------------------------------------------------------------------
+  # Android builds (arm64-v8a and armeabi-v7a)
+  # ----------------------------------------------------------------------
   build-android:
     runs-on: ubuntu-latest
     strategy:
@@ -64,15 +70,18 @@ jobs:
       - name: Build
         run: cmake --build build --config Release -j
 
+      - name: Rename binary
+        run: mv build/jaishi build/jaishi-android-${{ matrix.abi }}
+
       - name: Upload Android binary
         uses: actions/upload-artifact@v4
         with:
           name: jaishi-android-${{ matrix.abi }}
-          path: build/jaishi
+          path: build/jaishi-android-${{ matrix.abi }}
 
-  #############################
-  # 3. Release – triggered on tags
-  #############################
+  # ----------------------------------------------------------------------
+  # Release – runs only when a tag is pushed
+  # ----------------------------------------------------------------------
   release:
     needs: [build-native, build-android]
     runs-on: ubuntu-latest
@@ -84,6 +93,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
+
+      - name: List artifacts (debug)
+        run: find artifacts -type f
 
       - name: Create release and upload assets
         uses: softprops/action-gh-release@v1
