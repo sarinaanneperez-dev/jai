@@ -28,6 +28,7 @@ namespace {
 
 Board g_board;
 std::thread g_search_thread;
+std::atomic<bool> g_searching{false};
 
 void join_search() {
     if (g_search_thread.joinable()) g_search_thread.join();
@@ -37,7 +38,7 @@ void handle_uci() {
     std::cout << "id name Jaishi 1.0.0\n";
     std::cout << "id author The Jaishi Authors\n";
     std::cout << "option name Hash type spin default 64 min 1 max 4096\n";
-    std::cout << "option name Personality type check default true\n";
+    std::cout << "option name Personality type check default false\n";
     std::cout << "option name PersonalityStrength type spin default 25 min 0 max 100\n";
     std::cout << "uciok" << std::endl;
 }
@@ -71,6 +72,15 @@ void handle_setoption(std::istringstream& iss) {
 }
 
 void handle_position(std::istringstream& iss) {
+    // CRITICAL FIX: Stop any active search before modifying the board.
+    // The search thread reads g_board concurrently; modifying it while
+    // searching causes undefined behavior (corrupted board state).
+    if (g_searching.load()) {
+        STOP_FLAG.store(true);
+        join_search();
+        g_searching.store(false);
+    }
+
     std::string tok;
     if (!(iss >> tok)) return;
     if (tok == "startpos") {
@@ -110,8 +120,10 @@ void handle_go(std::istringstream& iss) {
 
     join_search();
     STOP_FLAG.store(false);
+    g_searching.store(true);
     g_search_thread = std::thread([limits] {
         Move best = search_best_move(g_board, limits);
+        g_searching.store(false);
         std::cout << "bestmove " << (best == NULL_MOVE ? std::string("0000") : move_to_uci(best))
                   << std::endl;
     });
@@ -120,6 +132,7 @@ void handle_go(std::istringstream& iss) {
 void handle_stop() {
     STOP_FLAG.store(true);
     join_search();
+    g_searching.store(false);
 }
 
 void handle_perft(std::istringstream& iss) {
@@ -143,7 +156,7 @@ void uci_loop() {
         if      (cmd == "uci")        handle_uci();
         else if (cmd == "isready")    handle_isready();
         else if (cmd == "setoption")  handle_setoption(iss);
-        else if (cmd == "ucinewgame") { TT.clear(); g_board.set_from_fen(START_FEN); }
+        else if (cmd == "ucinewgame") { handle_stop(); TT.clear(); g_board.set_from_fen(START_FEN); }
         else if (cmd == "position")   handle_position(iss);
         else if (cmd == "go")         handle_go(iss);
         else if (cmd == "stop")       handle_stop();

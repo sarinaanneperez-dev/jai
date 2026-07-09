@@ -15,12 +15,17 @@ struct SearchLimits {
 class TimeManager {
 public:
     void start(const SearchLimits& limits, int stm);
-    bool should_stop() const;
+    bool should_stop() const;       // hard limit — must stop now
+    bool should_stop_soft() const;  // soft limit — ok to stop after current depth
     long long elapsed_ms() const;
+
+    long long soft_limit_ms() const { return soft_limit_ms_; }
+    long long hard_limit_ms() const { return hard_limit_ms_; }
 
 private:
     std::chrono::steady_clock::time_point start_;
-    long long hard_limit_ms_ = 0; // absolute stop
+    long long soft_limit_ms_ = 0; // target time per move
+    long long hard_limit_ms_ = 0; // absolute stop (emergency)
     bool infinite_ = false;
 };
 

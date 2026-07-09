@@ -37,7 +37,7 @@ void init_lmr() {
 }
 bool LMR_INIT_DONE = (init_lmr(), true);
 
-// -------------- SEE helpers (internal) --------------
+// -------------- SEE --------------
 static int pt_val(PieceType pt) { return SEE_PIECE_VALUE[pt]; }
 
 static U64 least_valuable_attacker(const Board& b, U64 attackers, Color c, PieceType& out_pt) {
@@ -51,10 +51,7 @@ static U64 least_valuable_attacker(const Board& b, U64 attackers, Color c, Piece
     return 0;
 }
 
-} // namespace
-
-// -------------- SEE (public) --------------
-int see_capture(Board& b, Move m) {
+int see_capture_impl(Board& b, Move m) {
     int from = move_from(m);
     int to   = move_to(m);
     Piece attacker = b.piece_on(from);
@@ -99,8 +96,6 @@ int see_capture(Board& b, Move m) {
     while (--d) gain[d - 1] = -std::max(-gain[d - 1], gain[d]);
     return gain[0];
 }
-
-namespace {
 
 // -------------- Move ordering --------------
 static int score_move(Board& b, Move m, Move tt_move, int ply) {
@@ -157,7 +152,7 @@ int qsearch(Board& b, int alpha, int beta, int ply, Stack* ss) {
         Move m = list.moves[i].move;
 
         // Delta / SEE pruning: skip clearly-losing captures
-        int see_val = see_capture(b, m);
+        int see_val = see_capture_impl(b, m);
         if (see_val < 0) continue;
 
         if (!b.make_move(m)) continue;
@@ -345,6 +340,9 @@ Move search_best_move(Board& board, const SearchLimits& limits) {
     int alpha = -INF_SCORE, beta = INF_SCORE;
 
     for (int depth = 1; depth <= max_depth; ++depth) {
+        // Don't start a new depth if we're already out of time.
+        if (depth > 1 && TIMER.should_stop_soft() && best_move != NULL_MOVE) break;
+
         // Aspiration windows above depth 4
         int window = 30;
         if (depth >= 5) {
@@ -380,14 +378,9 @@ Move search_best_move(Board& board, const SearchLimits& limits) {
             std::cout << " " << move_to_uci(ss[0].pv[i]);
         std::cout << std::endl;
 
-        // Time budget: if we've spent more than half the budget, stop deepening.
+        // Soft time limit: stop deepening if we've used our soft budget.
         if (limits.movetime_ms == 0 && !limits.infinite && limits.depth == 0) {
-            long long budget = 0;
-            if (board.side_to_move == WHITE) budget = limits.wtime;
-            else                             budget = limits.btime;
-            if (budget > 0 && LAST_SEARCH.time_ms * 2 > budget / 30) {
-                // heuristic; TIMER.should_stop() covers hard limit
-            }
+            if (TIMER.should_stop_soft()) break;
         }
     }
 
@@ -422,16 +415,10 @@ Move search_best_move(Board& board, const SearchLimits& limits) {
         LAST_SEARCH.best_move = candidate;
     }
 
-        // Debug: print FEN before and after playing the best move
-    std::cout << "DEBUG: Before playing best move: " << board.to_fen() << std::endl;
-    if (!board.make_move(best_move)) {
-        std::cerr << "ERROR: Best move is illegal!\n";
-        return NULL_MOVE;
-    }
-    std::cout << "DEBUG: After playing best move: " << board.to_fen() << std::endl;
-    board.undo_move();
-
     return best_move;
 }
+
+// External wrapper for tests.
+int see(Board& b, Move m) { return see_capture_impl(b, m); }
 
 } // namespace jaishi

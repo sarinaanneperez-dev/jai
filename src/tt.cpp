@@ -51,8 +51,21 @@ bool TranspositionTable::probe(U64 key, TTEntry& out) const {
 
 void TranspositionTable::store(U64 key, Move best, int score, int depth, int ply, TTFlag flag) {
     TTEntry& e = entries_[key % count_];
-    // Replacement: always replace if empty, older age, or shallower depth.
-    if (e.flag == TT_NONE || e.age != age_ || e.depth <= depth || e.key != key) {
+
+    // Always replace empty entries or entries from a different key.
+    // For same-key collisions: prefer the entry from the newer search,
+    // or the one with greater depth.
+    bool replace = false;
+    if (e.flag == TT_NONE || e.key != key) {
+        replace = true;
+    } else if (e.age != age_) {
+        replace = true;  // old search generation
+    } else if (depth >= e.depth) {
+        replace = true;  // same age, greater or equal depth
+    }
+    // Also replace same-age, same-depth entries (fresh data wins ties).
+
+    if (replace) {
         e.key   = key;
         e.best  = best;
         e.score = score_to_tt(score, ply);

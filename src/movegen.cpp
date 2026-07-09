@@ -18,15 +18,13 @@ void movegen_init() {
     for (int sq = 0; sq < 64; ++sq) {
         int f = file_of(sq), r = rank_of(sq);
         U64 kn = 0, kg = 0;
-        for (const auto& d : KNIGHT_DELTAS) {
+        for (auto& d : KNIGHT_DELTAS) {
             int nf = f + d[0], nr = r + d[1];
-            if (nf >= 0 && nf < 8 && nr >= 0 && nr < 8)
-                kn |= bit(make_square(nf, nr));
+            if (nf >= 0 && nf < 8 && nr >= 0 && nr < 8) kn |= bit(make_square(nf, nr));
         }
-        for (const auto& d : KING_DELTAS) {
+        for (auto& d : KING_DELTAS) {
             int nf = f + d[0], nr = r + d[1];
-            if (nf >= 0 && nf < 8 && nr >= 0 && nr < 8)
-                kg |= bit(make_square(nf, nr));
+            if (nf >= 0 && nf < 8 && nr >= 0 && nr < 8) kg |= bit(make_square(nf, nr));
         }
         KNIGHT_ATTACKS[sq] = kn;
         KING_ATTACKS[sq]   = kg;
@@ -56,16 +54,13 @@ static U64 ray(int sq, int df, int dr, U64 occ) {
 }
 
 U64 bishop_attacks(int sq, U64 occ) {
-    return ray(sq, +1, +1, occ) | ray(sq, +1, -1, occ)
-         | ray(sq, -1, +1, occ) | ray(sq, -1, -1, occ);
+    return ray(sq,+1,+1,occ) | ray(sq,+1,-1,occ) | ray(sq,-1,+1,occ) | ray(sq,-1,-1,occ);
 }
-
 U64 rook_attacks(int sq, U64 occ) {
-    return ray(sq, +1, 0, occ) | ray(sq, -1, 0, occ)
-         | ray(sq, 0, +1, occ) | ray(sq, 0, -1, occ);
+    return ray(sq,+1,0,occ) | ray(sq,-1,0,occ) | ray(sq,0,+1,occ) | ray(sq,0,-1,occ);
 }
 
-// ---------- Move generation helpers ----------
+// ---------- move generation ----------
 
 static void add_pawn_moves(int from, int to, int flag, MoveList& list, bool promo) {
     if (promo) {
@@ -84,43 +79,52 @@ static void gen_pawns(Board& b, MoveList& list, bool captures_only) {
     U64 empty = ~b.all_bb;
     U64 enemy = b.color_bb[them];
     int forward = (us == WHITE) ? 8 : -8;
+    U64 rank3 = (us == WHITE) ? RANK_3 : RANK_6;
     U64 promoRank = (us == WHITE) ? RANK_8 : RANK_1;
 
     U64 tmp = pawns;
     while (tmp) {
         int from = pop_lsb(tmp);
+        int fr = rank_of(from);
 
-        // --- Captures ---
+        // Captures
         U64 att = PAWN_ATTACKS[us][from] & enemy;
         while (att) {
             int to = pop_lsb(att);
             bool promo = (bit(to) & promoRank) != 0;
             add_pawn_moves(from, to, FLAG_NORMAL, list, promo);
         }
-
-        // --- En passant ---
+        // En passant
         if (b.ep_square != NO_SQUARE) {
             if (PAWN_ATTACKS[us][from] & bit(b.ep_square)) {
                 list.add(make_move(from, b.ep_square, FLAG_EP));
             }
         }
 
-        // --- Non‑captures ---
+        if (captures_only) {
+            // Also generate promotions on push (they are "noisy")
+            int to1 = from + forward;
+            if (to1 >= 0 && to1 < 64 && (bit(to1) & promoRank) && (empty & bit(to1))) {
+                add_pawn_moves(from, to1, FLAG_NORMAL, list, true);
+            }
+            continue;
+        }
+
         int to1 = from + forward;
         if (to1 < 0 || to1 >= 64) continue;
         if (empty & bit(to1)) {
             bool promo = (bit(to1) & promoRank) != 0;
             add_pawn_moves(from, to1, FLAG_NORMAL, list, promo);
-
-            // Double push: only from starting rank, and both intermediate and destination must be empty
+            // Double push
             if (bit(from) & (us == WHITE ? RANK_2 : RANK_7)) {
                 int to2 = to1 + forward;
-                // to1 is already known empty from above, but we check both for clarity
-                if ((empty & bit(to1)) && (empty & bit(to2))) {
-                    list.add(make_move(from, to2, FLAG_NORMAL));
+                if ((empty & bit(to2)) && (bit(to1) & rank3 || true /*intermediate empty*/)) {
+                    (void)rank3;
+                    if (empty & bit(to2)) list.add(make_move(from, to2, FLAG_NORMAL));
                 }
             }
         }
+        (void)fr;
     }
 }
 
@@ -152,7 +156,6 @@ static void gen_piece(Board& b, MoveList& list, PieceType pt, bool captures_only
 static void gen_castling(Board& b, MoveList& list) {
     Color us = b.side_to_move;
     if (b.in_check()) return;
-
     if (us == WHITE) {
         if ((b.castling_rights & WHITE_OO)
             && !(b.all_bb & (bit(F1) | bit(G1)))
@@ -181,8 +184,6 @@ static void gen_castling(Board& b, MoveList& list) {
         }
     }
 }
-
-// ---------- Public move generators ----------
 
 void generate_all_moves(Board& b, MoveList& list) {
     list.clear();
